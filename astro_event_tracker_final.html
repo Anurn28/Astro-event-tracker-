@@ -1,0 +1,159 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Astronomical Event Tracker</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: url('https://upload.wikimedia.org/wikipedia/commons/2/28/Solar_sys.jpg') no-repeat center center fixed;
+      background-size: cover;
+      color: white;
+    }
+    header {
+      background: rgba(0, 0, 0, 0.6);
+      padding: 1rem;
+      text-align: center;
+      font-size: 2rem;
+    }
+    #sky-map {
+      width: 100%;
+      height: 500px;
+      margin: 0 auto;
+      border: none;
+    }
+    #location-input {
+      padding: 0.5rem;
+      margin: 1rem auto;
+      display: block;
+      width: 300px;
+      border-radius: 5px;
+    }
+    #events, #moon-phase, #star-classification {
+      padding: 1rem;
+      background: rgba(0, 0, 0, 0.6);
+      margin: 1rem;
+      border-radius: 10px;
+    }
+    .event {
+      margin: 1rem 0;
+      padding: 1rem;
+      border-bottom: 1px solid white;
+    }
+    .event img {
+      max-width: 100%;
+      height: auto;
+      margin-top: 0.5rem;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <header>Astronomical Event Tracker</header>
+
+  <iframe id="sky-map" src="https://virtualsky.lco.global/embed/index.html?longitude=0&latitude=0&projection=stereo&constellations=true&showstarlabels=true"></iframe>
+
+  <input type="text" id="location-input" placeholder="Enter location (e.g. New York, USA)" />
+
+  <div id="moon-phase">
+    <h2>Moon Phase</h2>
+    <div id="moon-data">Loading...</div>
+  </div>
+
+  <div id="star-classification">
+    <h2>Star Classification</h2>
+    <div id="star-data">
+      <p><strong>Sirius</strong> – Type: A1V, Magnitude: -1.46, Constellation: Canis Major</p>
+      <p><strong>Betelgeuse</strong> – Type: M2Iab, Magnitude: 0.50, Constellation: Orion</p>
+      <p><strong>Rigel</strong> – Type: B8Ia, Magnitude: 0.12, Constellation: Orion</p>
+      <p><strong>Vega</strong> – Type: A0V, Magnitude: 0.03, Constellation: Lyra</p>
+      <p><strong>Polaris</strong> – Type: F7Ib, Magnitude: 1.98, Constellation: Ursa Minor</p>
+    </div>
+  </div>
+
+  <div id="events">
+    <h2>Upcoming Astronomical Events</h2>
+    <div id="event-list">Loading...</div>
+  </div>
+
+  <script>
+    const eventList = document.getElementById("event-list");
+    const locationInput = document.getElementById("location-input");
+    const moonData = document.getElementById("moon-data");
+    const skyMap = document.getElementById("sky-map");
+
+    async function getCoordinates(location) {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json`);
+      const data = await res.json();
+      if (data.length === 0) throw new Error("Location not found");
+      return {
+        lat: data[0].lat,
+        lon: data[0].lon
+      };
+    }
+
+    async function fetchAstronomyEvents(lat, lon) {
+      const apiKey = "ln8iHf1KA4tbcTGgEqhV3dxgr8AMQxYAlXidTgOI";
+      const today = new Date();
+      const end = today.toISOString().split('T')[0];
+      const start = new Date(today.setDate(today.getDate() - 6)).toISOString().split('T')[0];
+      const url = `https://api.nasa.gov/planetary/apod?api_key=${apiKey}&start_date=${start}&end_date=${end}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      return data;
+    }
+
+    async function fetchMoonPhase(lat, lon) {
+      try {
+        const res = await fetch(`https://api.farmsense.net/v1/moonphases/?d=${Math.floor(Date.now() / 1000)}`);
+        const data = await res.json();
+        const phase = data[0]?.Phase || "Unknown";
+        const illumination = parseFloat(data[0]?.Illumination).toFixed(2) || "Not available";
+        moonData.innerHTML = `<p><strong>Phase:</strong> ${phase}</p><p><strong>Illumination:</strong> ${illumination}%</p>`;
+      } catch (e) {
+        moonData.innerHTML = "<p>Error loading moon phase data.</p>";
+      }
+    }
+
+    function updateSkyMap(lat, lon) {
+      skyMap.src = `https://virtualsky.lco.global/embed/index.html?longitude=${lon}&latitude=${lat}&projection=stereo&constellations=true&showstarlabels=true`;
+    }
+
+    async function updateEverything(location) {
+      try {
+        const { lat, lon } = await getCoordinates(location);
+        updateSkyMap(lat, lon);
+        fetchMoonPhase(lat, lon);
+        const events = await fetchAstronomyEvents(lat, lon);
+        eventList.innerHTML = "";
+        events.forEach(event => {
+          const div = document.createElement("div");
+          div.className = "event";
+          div.innerHTML = `
+            <h3>${event.title}</h3>
+            <p>${event.date}</p>
+            <p>${event.explanation}</p>
+            <img src="${event.url}" alt="event image" />
+          `;
+          eventList.appendChild(div);
+        });
+      } catch (error) {
+        eventList.innerHTML = `<p>Error: ${error.message}</p>`;
+        moonData.innerHTML = `<p>Could not fetch moon data.</p>`;
+      }
+    }
+
+    locationInput.addEventListener("change", () => {
+      const location = locationInput.value.trim();
+      if (location) {
+        updateEverything(location);
+      }
+    });
+
+    updateEverything("New York, USA");
+  </script>
+</body>
+</html>
